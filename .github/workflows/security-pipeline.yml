@@ -1,0 +1,112 @@
+name: DevSecOps Security Pipeline
+
+# Pipeline tu dong kich hoat khi co push hoac pull request vao nhanh main
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}   # cho phep bam nut "Run workflow" de demo truc tiep
+
+jobs:
+  # ============ STAGE 1: SAST - quet ma nguon tinh ============
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep (custom offline ruleset)
+        run: |
+          pip install semgrep
+          semgrep scan --config semgrep-rules.yml app.js --json --output semgrep-report.json || true
+
+      - name: Upload SAST report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
+
+  # ============ STAGE 2: SCA - quet dependency co lo hong ============
+  sca:
+    name: SCA (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run npm audit
+        run: npm audit --json > sca-report.json || true
+
+      - name: Upload SCA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-report
+          path: sca-report.json
+
+  # ============ STAGE 3: DAST - quet ung dung dang chay ============
+  dast:
+    name: DAST (OWASP ZAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Start application in background
+        run: |
+          nohup node app.js > app.log 2>&1 &
+          sleep 3
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:3000"
+          cmd_options: "-J zap-report.json"
+          fail_action: false
+
+      - name: Upload DAST report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report_json.json
+
+  # ============ STAGE 4: QUALITY GATE - tong hop & quyet dinh pass/fail ============
+  quality-gate:
+    name: Quality Gate
+    needs: [sast, sca]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: semgrep-report
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sca-report
+
+      - name: Evaluate Quality Gate
+        env:
+          MAX_CRITICAL: 0
+          MAX_HIGH: 0
+        run: node quality-gate.js
+
+      - name: Upload consolidated security report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.json

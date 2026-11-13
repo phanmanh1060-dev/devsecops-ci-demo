@@ -1,0 +1,50 @@
+rules:
+  - id: sql-injection-string-concat
+    languages: [javascript]
+    severity: ERROR
+    message: >
+      Phat hien nghi van SQL Injection (CWE-89): chuoi truy van SQL duoc noi
+      truc tiep tu du lieu dau vao thay vi dung tham so hoa (parameterized query).
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"
+    patterns:
+      - pattern-either:
+          - pattern: $QUERY = "..." + $INPUT + "..."
+          - pattern: $DB.run($X + $INPUT)
+          - pattern: $DB.all($X + $INPUT)
+          - pattern: $DB.get($X + $INPUT)
+
+  - id: hardcoded-secret
+    languages: [javascript]
+    severity: ERROR
+    message: >
+      Phat hien khoa bi mat (secret key) duoc gan cung trong ma nguon (CWE-798).
+      Can chuyen sang bien moi truong (environment variable) hoac secret manager.
+    metadata:
+      cwe: "CWE-798"
+      owasp: "A02:2021 - Cryptographic Failures"
+    pattern-regex: (const|let|var)\s+\w*(SECRET|PASSWORD|TOKEN|KEY)\w*\s*=\s*["'][^"']+["']
+
+  - id: jwt-without-expiry
+    languages: [javascript]
+    severity: WARNING
+    message: >
+      JWT duoc tao ra ma khong thiet lap thoi gian het han (expiresIn),
+      khien token co the bi su dung vinh vien neu bi lo (A07:2021).
+    metadata:
+      cwe: "CWE-613"
+      owasp: "A07:2021 - Identification and Authentication Failures"
+    pattern: jwt.sign($PAYLOAD, $SECRET)
+
+  - id: plaintext-password-in-sql-query
+    languages: [javascript]
+    severity: ERROR
+    message: >
+      Bien 'password' duoc noi truc tiep vao cau truy van SQL de so sanh dang
+      van ban thuong (khong hash) - CWE-256/CWE-89. Can bam mat khau (bcrypt/argon2)
+      va dung tham so hoa cho truy van.
+    metadata:
+      cwe: "CWE-256"
+      owasp: "A02:2021 - Cryptographic Failures"
+    pattern-regex: password\s*=\s*'"\s*\+\s*password
