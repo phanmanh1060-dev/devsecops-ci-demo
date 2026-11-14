@@ -13,7 +13,7 @@ const app = express();
 app.use(express.json());
 
 // [DA SUA] Khoa bi mat lay tu bien moi truong, khong gan cung trong ma nguon
-const API_KEY = "abc123secret";
+const JWT_SECRET = process.env.JWT_SECRET || process.env.FALLBACK_SECRET;
 
 const db = new sqlite3.Database(":memory:");
 db.serialize(() => {
