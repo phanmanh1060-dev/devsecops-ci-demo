@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Semgrep (custom offline ruleset)
+      - name: Run Semgrep (custom ruleset)
         run: |
           pip install semgrep
           semgrep scan --config semgrep-rules.yml app.js --json --output semgrep-report.json || true
@@ -67,20 +67,36 @@ jobs:
       - name: Start application in background
         run: |
           nohup node app.js > app.log 2>&1 &
-          sleep 3
+          for i in $(seq 1 20); do
+            if curl -s http://localhost:3000/ > /dev/null; then
+              echo "Ung dung da san sang"
+              break
+            fi
+            sleep 1
+          done
+          curl -s http://localhost:3000/
 
-      - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: "http://localhost:3000"
-          cmd_options: "-J zap-report.json"
-          fail_action: false
+      - name: Run OWASP ZAP baseline scan
+        run: |
+          chmod -R a+rwx "$GITHUB_WORKSPACE"
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:3000 \
+            -J zap-report.json -r zap-report.html -I || true
+
+      - name: Show DAST report files
+        if: always()
+        run: ls -la zap-report.* || true
 
       - name: Upload DAST report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: report_json.json
+          path: |
+            zap-report.json
+            zap-report.html
 
   # ============ STAGE 4: QUALITY GATE - tong hop & quyet dinh pass/fail ============
   quality-gate:
